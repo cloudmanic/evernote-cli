@@ -1,4 +1,4 @@
-module github.com/example/evernote-cli
+module github.com/cloudmanic/evernote-cli
 
 go 1.24.3
 
