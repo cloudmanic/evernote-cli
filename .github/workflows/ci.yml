@@ -1,0 +1,36 @@
+name: CI
+
+# Continuous Integration workflow that runs tests and builds the application
+# This workflow ensures that PRs cannot be merged if tests fail or the build breaks
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test and Build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: 'go.mod'
+        
+    - name: Install dependencies
+      run: go mod download
+    
+    - name: Verify dependencies
+      run: go mod verify
+      
+    - name: Run unit tests
+      run: go test ./...
+      
+    - name: Build application
+      run: go build .
