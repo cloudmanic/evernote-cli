@@ -2,6 +2,31 @@
 
 A CLI tool for interacting with Evernote. Currently supports authentication, searching notes, listing notebooks, and listing tags.
 
+## Installation
+
+### Download Pre-built Binaries
+
+The easiest way to install evernote-cli is to download a pre-built binary from the [GitHub Releases](https://github.com/cloudmanic/evernote-cli/releases) page.
+
+Available platforms:
+- **Linux**: x86_64 and ARM64
+- **macOS**: Intel and Apple Silicon 
+- **Windows**: x86_64 and ARM64
+
+Download the appropriate archive for your platform, extract it, and run the binary. On Unix systems, you may need to make it executable:
+```bash
+chmod +x evernote-cli
+```
+
+### Build from Source
+
+If you have Go installed, you can build from source:
+```bash
+git clone https://github.com/cloudmanic/evernote-cli.git
+cd evernote-cli
+go build .
+```
+
 ## Initial Setup
 
 Run `evernote-cli init` and follow the prompts to provide your Evernote developer client ID and secret. The command then opens a browser to authenticate and stores the resulting token together with your credentials in `~/.config/evernote/auth.json`.
@@ -58,6 +83,18 @@ Or use the test script:
 ```bash
 ./test.sh
 ```
+
+### Releases
+
+This project uses GitHub Actions to automatically build and release binaries for multiple platforms whenever code is merged to the main branch. 
+
+The release workflow:
+1. Builds binaries for Linux, macOS, and Windows (both x86_64 and ARM64)
+2. Creates compressed archives for distribution
+3. Automatically creates a GitHub release with all binaries attached
+4. Provides download instructions in the release notes
+
+To skip creating a release for a particular commit, include `[skip release]` in the commit message.
 
 ### Test Structure
 
