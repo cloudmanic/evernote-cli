@@ -38,3 +38,6 @@ Thumbs.db
 # Coverage files
 coverage.html
 coverage.out
+
+# Build artifacts
+dist/
