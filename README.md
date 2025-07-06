@@ -1,6 +1,6 @@
 # evernote-cli
 
-A CLI tool for interacting with Evernote. Currently supports authentication and searching notes.
+A CLI tool for interacting with Evernote. Currently supports authentication, searching notes, and listing notebooks.
 
 ## Initial Setup
 
@@ -15,4 +15,14 @@ evernote-cli search "your query"
 ```
 
 Use `--json` to output the raw JSON returned by the API.
+
+## Listing Notebooks
+
+List all available notebooks with:
+
+```bash
+evernote-cli notebooks
+```
+
+This will display a formatted list of notebooks with their names and GUIDs. Use `--json` to output the raw JSON returned by the API.
 
