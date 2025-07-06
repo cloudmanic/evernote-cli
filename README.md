@@ -2,15 +2,19 @@
 
 A CLI tool for interacting with Evernote. Currently supports authentication and searching notes.
 
+## Initial Setup
+
+Run `evernote-cli init` to store your Evernote developer credentials. You will be prompted for your client ID and secret which are saved to `~/.config/evernote/auth.json`.
+
 ## Authentication
 
-Before using other commands you must authenticate. Set the environment variables `EVERNOTE_CLIENT_ID` and `EVERNOTE_CLIENT_SECRET` with your developer credentials and run:
+Once initialized, obtain an OAuth token with:
 
 ```bash
 evernote-cli auth
 ```
 
-This will open a browser window to authenticate with Evernote. When finished, an access token is stored in `~/.config/evernote/auth.json`.
+This opens a browser window to authenticate with Evernote. The access token is saved alongside your credentials in `~/.config/evernote/auth.json`.
 
 ## Searching
 

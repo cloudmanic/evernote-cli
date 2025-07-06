@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -25,8 +24,15 @@ var authCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		clientID := os.Getenv("EVERNOTE_CLIENT_ID")
 		clientSecret := os.Getenv("EVERNOTE_CLIENT_SECRET")
+		cfg, _ := loadConfig()
+		if clientID == "" && cfg != nil {
+			clientID = cfg.ClientID
+		}
+		if clientSecret == "" && cfg != nil {
+			clientSecret = cfg.ClientSecret
+		}
 		if clientID == "" || clientSecret == "" {
-			return fmt.Errorf("EVERNOTE_CLIENT_ID and EVERNOTE_CLIENT_SECRET must be set")
+			return fmt.Errorf("client ID and secret must be provided (run 'evernote-cli init')")
 		}
 
 		ctx := context.Background()
@@ -65,13 +71,14 @@ var authCmd = &cobra.Command{
 			return fmt.Errorf("token exchange failed: %w", err)
 		}
 
-		tokenData, err := json.Marshal(token)
-		if err != nil {
-			return err
+		if cfg == nil {
+			cfg = &Config{}
 		}
-		configDir := os.Getenv("HOME") + "/.config/evernote"
-		os.MkdirAll(configDir, 0700)
-		if err := os.WriteFile(configDir+"/auth.json", tokenData, 0600); err != nil {
+		cfg.ClientID = clientID
+		cfg.ClientSecret = clientSecret
+		cfg.Token = token
+
+		if err := saveConfig(cfg); err != nil {
 			return err
 		}
 		fmt.Println("Authentication successful. Token saved.")
