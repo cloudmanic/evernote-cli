@@ -157,8 +157,12 @@ func TestSaveConfig(t *testing.T) {
 	})
 
 	t.Run("save to protected directory", func(t *testing.T) {
-		// This test might fail on some systems due to permissions
-		configPath = "/root/protected/test-config.json"
+                // This test might fail on systems where the directory is writable (for example when running as root).
+                // Skip to avoid false failures in such cases.
+                if os.Geteuid() == 0 {
+                        t.Skip("skipping permissions test when running as root")
+                }
+                configPath = "/root/protected/test-config.json"
 		
 		testConfig := &Config{
 			ClientID:     "test-client-id",
