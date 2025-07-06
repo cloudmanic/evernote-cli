@@ -1,6 +1,6 @@
 # evernote-cli
 
-A CLI tool for interacting with Evernote. Currently supports authentication, searching notes, and listing notebooks.
+A CLI tool for interacting with Evernote. Currently supports authentication, searching notes, listing notebooks, and listing tags.
 
 ## Initial Setup
 
@@ -25,6 +25,16 @@ evernote-cli notebooks
 ```
 
 This will display a formatted list of notebooks with their names and GUIDs. Use `--json` to output the raw JSON returned by the API.
+
+## Listing Tags
+
+List all available tags with:
+
+```bash
+evernote-cli tags
+```
+
+This will display a formatted list of tags with their names and GUIDs. Use `--json` to output the raw JSON returned by the API.
 
 ## Development
 
@@ -58,6 +68,8 @@ The project includes comprehensive unit tests for all components:
 - `cmd/auth_test.go` - Tests for OAuth2 authentication components
 - `cmd/init_test.go` - Tests for initialization command logic
 - `cmd/search_test.go` - Tests for search command functionality
+- `cmd/notebooks_test.go` - Tests for notebooks command functionality
+- `cmd/tags_test.go` - Tests for tags command functionality
 
 Tests focus on testing individual functions and components in isolation, using mocking for external dependencies like HTTP calls and file I/O.
 
