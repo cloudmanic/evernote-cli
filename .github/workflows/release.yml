@@ -1,0 +1,126 @@
+name: Release
+
+# Build and release binaries for multiple platforms when code is pushed to main
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all history for version info
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: 'go.mod'
+        
+    - name: Install dependencies
+      run: go mod download
+    
+    - name: Verify dependencies
+      run: go mod verify
+      
+    - name: Run tests
+      run: go test ./...
+    
+    - name: Generate version and check if release needed
+      id: version
+      run: |
+        # Use timestamp + short commit SHA as version for uniqueness
+        TIMESTAMP=$(date +%Y%m%d%H%M%S)
+        SHORT_SHA=$(git rev-parse --short HEAD)
+        VERSION="${TIMESTAMP}-${SHORT_SHA}"
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "Version: ${VERSION}"
+        
+        # Check if we should create a release (skip if commit message contains [skip release])
+        COMMIT_MSG=$(git log -1 --pretty=format:'%s')
+        if [[ "$COMMIT_MSG" == *"[skip release]"* ]]; then
+          echo "Skipping release due to [skip release] in commit message"
+          echo "should_release=false" >> $GITHUB_OUTPUT
+        else
+          echo "should_release=true" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Build for multiple platforms
+      if: steps.version.outputs.should_release == 'true'
+      run: |
+        mkdir -p dist
+        
+        # Define platforms to build for
+        platforms=(
+          "linux/amd64"
+          "linux/arm64"
+          "darwin/amd64"
+          "darwin/arm64"
+          "windows/amd64"
+          "windows/arm64"
+        )
+        
+        for platform in "${platforms[@]}"; do
+          IFS='/' read -r GOOS GOARCH <<< "$platform"
+          output_name="evernote-cli-${GOOS}-${GOARCH}"
+          
+          if [ "$GOOS" = "windows" ]; then
+            output_name="${output_name}.exe"
+          fi
+          
+          echo "Building for $GOOS/$GOARCH..."
+          GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w" -o "dist/${output_name}" .
+          
+          # Create compressed archives for easier distribution
+          if [ "$GOOS" = "windows" ]; then
+            (cd dist && zip "${output_name%.exe}.zip" "${output_name}")
+          else
+            (cd dist && tar -czf "${output_name}.tar.gz" "${output_name}")
+          fi
+        done
+        
+        # List built files
+        ls -la dist/
+    
+    - name: Create Release and Upload Assets
+      if: steps.version.outputs.should_release == 'true'
+      run: |
+        # Create release notes
+        cat > release_notes.md << 'EOF'
+        Automated release of evernote-cli
+        
+        Built from commit: ${{ github.sha }}
+        
+        ## Download Instructions
+        
+        Download the appropriate binary for your platform:
+        
+        ### Linux
+        - **x86_64**: `evernote-cli-linux-amd64.tar.gz`
+        - **ARM64**: `evernote-cli-linux-arm64.tar.gz`
+        
+        ### macOS
+        - **Intel**: `evernote-cli-darwin-amd64.tar.gz`
+        - **Apple Silicon**: `evernote-cli-darwin-arm64.tar.gz`
+        
+        ### Windows
+        - **x86_64**: `evernote-cli-windows-amd64.zip`
+        - **ARM64**: `evernote-cli-windows-arm64.zip`
+        
+        Extract the archive and run the binary. On Unix systems, you may need to make it executable:
+        ```bash
+        chmod +x evernote-cli
+        ```
+        EOF
+        
+        # Create the release
+        gh release create "v${{ steps.version.outputs.version }}" \
+          --title "Release v${{ steps.version.outputs.version }}" \
+          --notes-file release_notes.md \
+          dist/*.tar.gz dist/*.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
