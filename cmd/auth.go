@@ -18,6 +18,44 @@ var evernoteEndpoint = oauth2.Endpoint{
 	TokenURL: "https://www.evernote.com/oauth2/token",
 }
 
+// runAuthFlow performs the OAuth flow and returns the resulting token.
+func runAuthFlow(clientID, clientSecret string) (*oauth2.Token, error) {
+	ctx := context.Background()
+	conf := &oauth2.Config{
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		Scopes:       []string{"basic"},
+		Endpoint:     evernoteEndpoint,
+		RedirectURL:  "http://localhost:8080/callback",
+	}
+
+	srv := &http.Server{Addr: ":8080"}
+	codeCh := make(chan string)
+	http.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+		code := r.URL.Query().Get("code")
+		fmt.Fprintf(w, "Authentication complete. You can close this window.")
+		codeCh <- code
+	})
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("server error: %v", err)
+		}
+	}()
+
+	url := conf.AuthCodeURL("state", oauth2.AccessTypeOffline)
+	exec.Command("xdg-open", url).Start()
+	fmt.Printf("If the browser did not open, visit: %s\n", url)
+
+	code := <-codeCh
+	srv.Shutdown(ctx)
+
+	token, err := conf.Exchange(ctx, code)
+	if err != nil {
+		return nil, fmt.Errorf("token exchange failed: %w", err)
+	}
+	return token, nil
+}
+
 var authCmd = &cobra.Command{
 	Use:   "auth",
 	Short: "Authenticate with Evernote",
@@ -34,41 +72,9 @@ var authCmd = &cobra.Command{
 		if clientID == "" || clientSecret == "" {
 			return fmt.Errorf("client ID and secret must be provided (run 'evernote-cli init')")
 		}
-
-		ctx := context.Background()
-		conf := &oauth2.Config{
-			ClientID:     clientID,
-			ClientSecret: clientSecret,
-			Scopes:       []string{"basic"},
-			Endpoint:     evernoteEndpoint,
-			RedirectURL:  "http://localhost:8080/callback",
-		}
-
-		// Start a local server to receive the callback
-		srv := &http.Server{Addr: ":8080"}
-		codeCh := make(chan string)
-		http.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
-			code := r.URL.Query().Get("code")
-			fmt.Fprintf(w, "Authentication complete. You can close this window.")
-			codeCh <- code
-		})
-		go func() {
-			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("server error: %v", err)
-			}
-		}()
-
-		url := conf.AuthCodeURL("state", oauth2.AccessTypeOffline)
-		// Open browser if possible
-		exec.Command("xdg-open", url).Start()
-		fmt.Printf("If the browser did not open, visit: %s\n", url)
-
-		code := <-codeCh
-		srv.Shutdown(ctx)
-
-		token, err := conf.Exchange(ctx, code)
+		token, err := runAuthFlow(clientID, clientSecret)
 		if err != nil {
-			return fmt.Errorf("token exchange failed: %w", err)
+			return err
 		}
 
 		if cfg == nil {

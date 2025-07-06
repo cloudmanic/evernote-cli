@@ -62,7 +62,7 @@ func checkAuth() (string, error) {
 		return "", fmt.Errorf("could not read config: %w", err)
 	}
 	if cfg.Token == nil || !cfg.Token.Valid() {
-		return "", fmt.Errorf("no valid token found, run 'evernote-cli auth'")
+		return "", fmt.Errorf("no valid token found, run 'evernote-cli init'")
 	}
 	return cfg.Token.AccessToken, nil
 }
