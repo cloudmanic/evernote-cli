@@ -12,7 +12,8 @@ var tagsCmd = &cobra.Command{
 	Use:   "tags",
 	Short: "List all tags",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		token, err := checkAuth()
+		// Get OAuth 1.0a client
+		client, err := getOAuth1Client()
 		if err != nil {
 			return err
 		}
@@ -21,9 +22,8 @@ var tagsCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		req.Header.Set("Authorization", "Bearer "+token)
 
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			return err
 		}

@@ -57,11 +57,11 @@ func TestInitCommandInputHandling(t *testing.T) {
 	// Test the input/output handling pattern used in init command
 	t.Run("output formatting", func(t *testing.T) {
 		var output bytes.Buffer
-		
+
 		// Test the prompts that would be written by init command
 		output.WriteString("Evernote Client ID: ")
 		assert.Contains(t, output.String(), "Evernote Client ID:")
-		
+
 		output.WriteString("Evernote Client Secret: ")
 		assert.Contains(t, output.String(), "Evernote Client Secret:")
 	})
@@ -69,11 +69,11 @@ func TestInitCommandInputHandling(t *testing.T) {
 	t.Run("success message formatting", func(t *testing.T) {
 		var output bytes.Buffer
 		configPath := "/test/path/config.json"
-		
+
 		// Test the success message format
 		message := "Authentication successful. Configuration saved to " + configPath + "\n"
 		output.WriteString(message)
-		
+
 		result := output.String()
 		assert.Contains(t, result, "Authentication successful")
 		assert.Contains(t, result, configPath)
@@ -86,12 +86,12 @@ func TestConfigStructCreation(t *testing.T) {
 	t.Run("config with credentials only", func(t *testing.T) {
 		id := "test-client-id"
 		secret := "test-client-secret"
-		
+
 		cfg := &Config{
 			ClientID:     id,
 			ClientSecret: secret,
 		}
-		
+
 		assert.Equal(t, id, cfg.ClientID)
 		assert.Equal(t, secret, cfg.ClientSecret)
 		assert.Nil(t, cfg.Token)
@@ -100,19 +100,19 @@ func TestConfigStructCreation(t *testing.T) {
 	t.Run("config with credentials and token", func(t *testing.T) {
 		id := "test-client-id"
 		secret := "test-client-secret"
-		
+
 		cfg := &Config{
 			ClientID:     id,
 			ClientSecret: secret,
 		}
-		
+
 		// Simulate adding token later (as would happen in init flow)
 		// Note: In real init command, token comes from runAuthFlow
 		cfg.Token = &oauth2.Token{
 			AccessToken: "test-token",
 			TokenType:   "Bearer",
 		}
-		
+
 		assert.Equal(t, id, cfg.ClientID)
 		assert.Equal(t, secret, cfg.ClientSecret)
 		assert.NotNil(t, cfg.Token)
@@ -130,7 +130,7 @@ func TestInitCommandFlow(t *testing.T) {
 			"\n",
 			"\t\n",
 		}
-		
+
 		for _, input := range testInputs {
 			trimmed := strings.TrimSpace(input)
 			assert.Empty(t, trimmed, "empty inputs should result in empty strings after trimming")
@@ -141,10 +141,10 @@ func TestInitCommandFlow(t *testing.T) {
 		// Test that valid inputs are preserved correctly
 		testInputs := map[string]string{
 			"valid-client-id\n":     "valid-client-id",
-			"valid-client-secret\n": "valid-client-secret", 
+			"valid-client-secret\n": "valid-client-secret",
 			"  spaced-id  \n":       "spaced-id",
 		}
-		
+
 		for input, expected := range testInputs {
 			trimmed := strings.TrimSpace(input)
 			assert.Equal(t, expected, trimmed)

@@ -31,7 +31,8 @@ var initCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		cfg.Token = token
+		cfg.OAuth1Token = token.Token
+		cfg.OAuth1TokenSecret = token.TokenSecret
 		if err := saveConfig(cfg); err != nil {
 			return err
 		}
