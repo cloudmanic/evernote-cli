@@ -24,7 +24,7 @@ func TestLoadConfig(t *testing.T) {
 
 	t.Run("successful load", func(t *testing.T) {
 		configPath = filepath.Join(tempDir, "test-config.json")
-		
+
 		// Create a test config
 		testConfig := Config{
 			ClientID:     "test-client-id",
@@ -56,7 +56,7 @@ func TestLoadConfig(t *testing.T) {
 
 	t.Run("file does not exist", func(t *testing.T) {
 		configPath = filepath.Join(tempDir, "nonexistent-config.json")
-		
+
 		config, err := loadConfig()
 		assert.Error(t, err)
 		assert.Nil(t, config)
@@ -65,7 +65,7 @@ func TestLoadConfig(t *testing.T) {
 
 	t.Run("invalid JSON", func(t *testing.T) {
 		configPath = filepath.Join(tempDir, "invalid-config.json")
-		
+
 		// Write invalid JSON
 		err = os.WriteFile(configPath, []byte("invalid json content"), 0600)
 		require.NoError(t, err)
@@ -77,7 +77,7 @@ func TestLoadConfig(t *testing.T) {
 
 	t.Run("empty file", func(t *testing.T) {
 		configPath = filepath.Join(tempDir, "empty-config.json")
-		
+
 		// Write empty file
 		err = os.WriteFile(configPath, []byte(""), 0600)
 		require.NoError(t, err)
@@ -100,7 +100,7 @@ func TestSaveConfig(t *testing.T) {
 
 	t.Run("successful save", func(t *testing.T) {
 		configPath = filepath.Join(tempDir, "subdir", "test-config.json")
-		
+
 		testConfig := &Config{
 			ClientID:     "test-client-id",
 			ClientSecret: "test-client-secret",
@@ -133,7 +133,7 @@ func TestSaveConfig(t *testing.T) {
 
 	t.Run("save config without token", func(t *testing.T) {
 		configPath = filepath.Join(tempDir, "no-token-config.json")
-		
+
 		testConfig := &Config{
 			ClientID:     "test-client-id",
 			ClientSecret: "test-client-secret",
@@ -146,24 +146,24 @@ func TestSaveConfig(t *testing.T) {
 		// Verify the file was created and token is omitted
 		data, err := os.ReadFile(configPath)
 		require.NoError(t, err)
-		
+
 		var savedConfig Config
 		err = json.Unmarshal(data, &savedConfig)
 		require.NoError(t, err)
-		
+
 		assert.Equal(t, testConfig.ClientID, savedConfig.ClientID)
 		assert.Equal(t, testConfig.ClientSecret, savedConfig.ClientSecret)
 		assert.Nil(t, savedConfig.Token)
 	})
 
 	t.Run("save to protected directory", func(t *testing.T) {
-                // This test might fail on systems where the directory is writable (for example when running as root).
-                // Skip to avoid false failures in such cases.
-                if os.Geteuid() == 0 {
-                        t.Skip("skipping permissions test when running as root")
-                }
-                configPath = "/root/protected/test-config.json"
-		
+		// This test might fail on systems where the directory is writable (for example when running as root).
+		// Skip to avoid false failures in such cases.
+		if os.Geteuid() == 0 {
+			t.Skip("skipping permissions test when running as root")
+		}
+		configPath = "/root/protected/test-config.json"
+
 		testConfig := &Config{
 			ClientID:     "test-client-id",
 			ClientSecret: "test-client-secret",
@@ -187,7 +187,7 @@ func TestCheckAuth(t *testing.T) {
 
 	t.Run("valid token", func(t *testing.T) {
 		configPath = filepath.Join(tempDir, "valid-token-config.json")
-		
+
 		// Create config with valid token
 		testConfig := Config{
 			ClientID:     "test-client-id",
@@ -211,7 +211,7 @@ func TestCheckAuth(t *testing.T) {
 
 	t.Run("expired token", func(t *testing.T) {
 		configPath = filepath.Join(tempDir, "expired-token-config.json")
-		
+
 		// Create config with expired token
 		testConfig := Config{
 			ClientID:     "test-client-id",
@@ -236,7 +236,7 @@ func TestCheckAuth(t *testing.T) {
 
 	t.Run("nil token", func(t *testing.T) {
 		configPath = filepath.Join(tempDir, "nil-token-config.json")
-		
+
 		// Create config without token
 		testConfig := Config{
 			ClientID:     "test-client-id",
@@ -257,7 +257,7 @@ func TestCheckAuth(t *testing.T) {
 
 	t.Run("config file does not exist", func(t *testing.T) {
 		configPath = filepath.Join(tempDir, "nonexistent-config.json")
-		
+
 		token, err := checkAuth()
 		assert.Error(t, err)
 		assert.Empty(t, token)

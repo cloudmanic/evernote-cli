@@ -108,7 +108,7 @@ func TestSearchJSONFormatting(t *testing.T) {
 
 	t.Run("json encoding with indentation", func(t *testing.T) {
 		var output bytes.Buffer
-		
+
 		// Test the JSON encoding logic used in search command
 		enc := json.NewEncoder(&output)
 		enc.SetIndent("", "  ")
@@ -129,7 +129,7 @@ func TestSearchJSONFormatting(t *testing.T) {
 		result := string(bytes)
 		assert.Contains(t, result, "\"notes\"")
 		assert.Contains(t, result, "\"Test Note\"")
-		assert.Contains(t, result, "  ") // Should be indented
+		assert.Contains(t, result, "  ")                 // Should be indented
 		assert.False(t, strings.HasSuffix(result, "\n")) // MarshalIndent doesn't add final newline
 	})
 }
@@ -167,7 +167,7 @@ func TestSearchHTTPRequest(t *testing.T) {
 			assert.Equal(t, "GET", r.Method)
 			assert.Contains(t, r.URL.Path, "/v1/search")
 			assert.Equal(t, "Bearer test-access-token", r.Header.Get("Authorization"))
-			
+
 			// Return mock response
 			mockResponse := map[string]interface{}{
 				"notes": []map[string]interface{}{
@@ -182,7 +182,7 @@ func TestSearchHTTPRequest(t *testing.T) {
 		// Test making a request to our mock server
 		token, err := checkAuth()
 		require.NoError(t, err)
-		
+
 		req, err := http.NewRequest("GET", server.URL+"/v1/search?query=test", nil)
 		require.NoError(t, err)
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -192,11 +192,11 @@ func TestSearchHTTPRequest(t *testing.T) {
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		
+
 		var data interface{}
 		err = json.NewDecoder(resp.Body).Decode(&data)
 		require.NoError(t, err)
-		
+
 		// Verify we got the expected mock data
 		dataMap := data.(map[string]interface{})
 		assert.Contains(t, dataMap, "notes")

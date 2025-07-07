@@ -3,6 +3,7 @@ module github.com/cloudmanic/evernote-cli
 go 1.24.3
 
 require (
+	github.com/dghubble/oauth1 v0.7.3
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/oauth2 v0.30.0

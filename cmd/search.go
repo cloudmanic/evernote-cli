@@ -14,18 +14,19 @@ var searchCmd = &cobra.Command{
 	Short: "Search notes",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		token, err := checkAuth()
+		// Get OAuth 1.0a client
+		client, err := getOAuth1Client()
 		if err != nil {
 			return err
 		}
+		
 		q := url.QueryEscape(args[0])
 		req, err := http.NewRequest("GET", "https://api.evernote.com/v1/search?query="+q, nil)
 		if err != nil {
 			return err
 		}
-		req.Header.Set("Authorization", "Bearer "+token)
 
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			return err
 		}
