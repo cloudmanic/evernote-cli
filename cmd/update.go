@@ -15,6 +15,7 @@ import (
 var (
 	updateTitle  string
 	updateBody   string
+	updateHTML   string
 	updateAppend string
 	updateTags   []string
 )
@@ -33,11 +34,14 @@ Examples:
   evernote-cli update <guid> --title "New Title" --append "And add this"`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if updateTitle == "" && updateBody == "" && updateAppend == "" && len(updateTags) == 0 {
-			return fmt.Errorf("at least one of --title, --body, --append, or --tags is required")
+		if updateTitle == "" && updateBody == "" && updateHTML == "" && updateAppend == "" && len(updateTags) == 0 {
+			return fmt.Errorf("at least one of --title, --body, --html, --append, or --tags is required")
 		}
 		if updateBody != "" && updateAppend != "" {
 			return fmt.Errorf("--body and --append cannot be used together")
+		}
+		if updateHTML != "" && (updateBody != "" || updateAppend != "") {
+			return fmt.Errorf("--html cannot be used with --body or --append")
 		}
 
 		ns, token, err := getNoteStoreFunc()
@@ -67,7 +71,11 @@ Examples:
 		}
 
 		// Handle content changes
-		if updateBody != "" {
+		if updateHTML != "" {
+			// Replace body with raw HTML (no escaping)
+			content := wrapHTMLInENML(updateHTML)
+			note.Content = &content
+		} else if updateBody != "" {
 			// Replace body entirely
 			content := wrapENML(updateBody)
 			note.Content = &content
@@ -113,6 +121,7 @@ Examples:
 func init() {
 	updateCmd.Flags().StringVar(&updateTitle, "title", "", "new title for the note")
 	updateCmd.Flags().StringVar(&updateBody, "body", "", "replace the note body entirely")
+	updateCmd.Flags().StringVar(&updateHTML, "html", "", "replace the note body with raw HTML (not escaped)")
 	updateCmd.Flags().StringVar(&updateAppend, "append", "", "append text to the existing note content")
 	updateCmd.Flags().StringSliceVar(&updateTags, "tags", nil, "comma separated list of tag names")
 	rootCmd.AddCommand(updateCmd)
