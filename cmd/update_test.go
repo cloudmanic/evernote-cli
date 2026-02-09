@@ -143,7 +143,7 @@ func TestUpdateCommand(t *testing.T) {
 
 		err := updateCmd.RunE(updateCmd, []string{"note-123"})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "at least one of --title, --body, --append, or --tags is required")
+		assert.Contains(t, err.Error(), "at least one of --title, --body, --html, --append, or --tags is required")
 	})
 
 	t.Run("body and append conflict", func(t *testing.T) {
