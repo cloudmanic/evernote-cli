@@ -2,264 +2,124 @@ package cmd
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
-	"path/filepath"
-	"strings"
 	"testing"
-	"time"
 
-	"github.com/spf13/cobra"
-	"golang.org/x/oauth2"
+	"github.com/dreampuf/evernote-sdk-golang/edam"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNotebooksCommand(t *testing.T) {
-	// Setup test config directory
-	tempDir := t.TempDir()
-	originalConfigPath := configPath
-	configPath = filepath.Join(tempDir, "auth.json")
-	defer func() { configPath = originalConfigPath }()
+	t.Run("successful notebooks list with formatting", func(t *testing.T) {
+		name1 := "Default Notebook"
+		guid1 := edam.GUID("12345")
+		def1 := true
+		name2 := "Work Notes"
+		guid2 := edam.GUID("67890")
 
-	// Create a test config with a valid token
-	testConfig := &Config{
-		ClientID:     "test-client-id",
-		ClientSecret: "test-client-secret",
-		Token: &oauth2.Token{
-			AccessToken: "test-token",
-			TokenType:   "Bearer",
-		},
-	}
-	// Make token appear valid by setting it as non-expired
-	testConfig.Token.Expiry = time.Now().Add(time.Hour)
+		mock := &mockNoteStore{
+			notebooks: []*edam.Notebook{
+				{Name: &name1, GUID: &guid1, DefaultNotebook: &def1},
+				{Name: &name2, GUID: &guid2},
+			},
+		}
+		cleanup := setMockNoteStore(mock)
+		defer cleanup()
 
-	// Save test config
-	if err := saveConfig(testConfig); err != nil {
-		t.Fatalf("Failed to save test config: %v", err)
-	}
+		var buf bytes.Buffer
+		notebooksCmd.SetOut(&buf)
+		jsonFlag = false
+		err := notebooksCmd.RunE(notebooksCmd, []string{})
+		require.NoError(t, err)
 
-	tests := []struct {
-		name           string
-		jsonFlag       bool
-		responseBody   string
-		statusCode     int
-		expectedOutput string
-		expectError    bool
-	}{
-		{
-			name:       "successful notebooks list with formatting",
-			jsonFlag:   false,
-			statusCode: http.StatusOK,
-			responseBody: `{
-				"notebooks": [
-					{
-						"name": "Default Notebook",
-						"guid": "12345",
-						"defaultNotebook": true
-					},
-					{
-						"name": "Work Notes",
-						"guid": "67890",
-						"defaultNotebook": false
-					}
-				]
-			}`,
-			expectedOutput: "Found 2 notebook(s):\n\n1. Default Notebook (default)\n   GUID: 12345\n\n2. Work Notes\n   GUID: 67890\n\n",
-			expectError:    false,
-		},
-		{
-			name:       "successful notebooks list with JSON output",
-			jsonFlag:   true,
-			statusCode: http.StatusOK,
-			responseBody: `{
-				"notebooks": [
-					{
-						"name": "Default Notebook",
-						"guid": "12345",
-						"defaultNotebook": true
-					}
-				]
-			}`,
-			expectedOutput: `{
-  "notebooks": [
-    {
-      "defaultNotebook": true,
-      "guid": "12345",
-      "name": "Default Notebook"
-    }
-  ]
-}`,
-			expectError: false,
-		},
-		{
-			name:           "empty notebooks list",
-			jsonFlag:       false,
-			statusCode:     http.StatusOK,
-			responseBody:   `{"notebooks": []}`,
-			expectedOutput: "No notebooks found.\n",
-			expectError:    false,
-		},
-		{
-			name:        "API error response",
-			jsonFlag:    false,
-			statusCode:  http.StatusUnauthorized,
-			expectError: true,
-		},
-		{
-			name:       "malformed response falls back to JSON",
-			jsonFlag:   false,
-			statusCode: http.StatusOK,
-			responseBody: `{
-				"invalid": "response"
-			}`,
-			expectedOutput: `{
-  "invalid": "response"
-}`,
-			expectError: false,
-		},
-	}
+		output := buf.String()
+		assert.Contains(t, output, "Found 2 notebook(s):")
+		assert.Contains(t, output, "1. Default Notebook (default)")
+		assert.Contains(t, output, "GUID: 12345")
+		assert.Contains(t, output, "2. Work Notes")
+		assert.Contains(t, output, "GUID: 67890")
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create a test server
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Verify the request
-				if r.Method != "GET" {
-					t.Errorf("Expected GET request, got %s", r.Method)
-				}
-				if r.URL.Path != "/v1/notebooks" {
-					t.Errorf("Expected path /v1/notebooks, got %s", r.URL.Path)
-				}
-				if r.Header.Get("Authorization") != "Bearer test-token" {
-					t.Errorf("Expected Authorization header 'Bearer test-token', got %s", r.Header.Get("Authorization"))
-				}
+	t.Run("successful notebooks list with JSON output", func(t *testing.T) {
+		name := "Default Notebook"
+		guid := edam.GUID("12345")
+		def := true
 
-				w.WriteHeader(tt.statusCode)
-				if tt.responseBody != "" {
-					w.Write([]byte(tt.responseBody))
-				}
-			}))
-			defer server.Close()
+		mock := &mockNoteStore{
+			notebooks: []*edam.Notebook{
+				{Name: &name, GUID: &guid, DefaultNotebook: &def},
+			},
+		}
+		cleanup := setMockNoteStore(mock)
+		defer cleanup()
 
-			// Create a test command with modified URL
-			cmd := &cobra.Command{
-				Use:   "notebooks",
-				Short: "List all notebooks",
-				RunE: func(cmd *cobra.Command, args []string) error {
-					token, err := checkAuth()
-					if err != nil {
-						return err
-					}
+		var buf bytes.Buffer
+		notebooksCmd.SetOut(&buf)
+		jsonFlag = true
+		err := notebooksCmd.RunE(notebooksCmd, []string{})
+		require.NoError(t, err)
 
-					// Use test server URL instead of real API
-					req, err := http.NewRequest("GET", server.URL+"/v1/notebooks", nil)
-					if err != nil {
-						return err
-					}
-					req.Header.Set("Authorization", "Bearer "+token)
+		output := buf.String()
+		assert.Contains(t, output, "Default Notebook")
+		assert.Contains(t, output, "12345")
+	})
 
-					resp, err := http.DefaultClient.Do(req)
-					if err != nil {
-						return err
-					}
-					defer resp.Body.Close()
-					if resp.StatusCode != http.StatusOK {
-						return fmt.Errorf("unexpected status: %s", resp.Status)
-					}
+	t.Run("empty notebooks list", func(t *testing.T) {
+		mock := &mockNoteStore{
+			notebooks: []*edam.Notebook{},
+		}
+		cleanup := setMockNoteStore(mock)
+		defer cleanup()
 
-					var data interface{}
-					if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-						return err
-					}
+		var buf bytes.Buffer
+		notebooksCmd.SetOut(&buf)
+		jsonFlag = false
+		err := notebooksCmd.RunE(notebooksCmd, []string{})
+		require.NoError(t, err)
 
-					if tt.jsonFlag {
-						jsonFlag = true
-						enc := json.NewEncoder(cmd.OutOrStdout())
-						enc.SetIndent("", "  ")
-						return enc.Encode(data)
-					}
+		assert.Contains(t, buf.String(), "No notebooks found.")
+	})
 
-					jsonFlag = false
-					return formatNotebooks(cmd, data)
-				},
-			}
+	t.Run("API error", func(t *testing.T) {
+		mock := &mockNoteStore{
+			notebooks: []*edam.Notebook{},
+			err:       fmt.Errorf("auth expired"),
+		}
+		cleanup := setMockNoteStore(mock)
+		defer cleanup()
 
-			// Capture output
-			var buf bytes.Buffer
-			cmd.SetOut(&buf)
+		jsonFlag = false
+		err := notebooksCmd.RunE(notebooksCmd, []string{})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "auth expired")
+	})
 
-			// Execute command
-			err := cmd.Execute()
+	t.Run("auth error returns error", func(t *testing.T) {
+		mock := &mockNoteStore{err: fmt.Errorf("not authenticated")}
+		cleanup := setMockNoteStore(mock)
+		defer cleanup()
 
-			// Check results
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("Expected error, but got none")
-				}
-			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
-				output := buf.String()
-				if !strings.Contains(output, strings.TrimSpace(tt.expectedOutput)) {
-					t.Errorf("Expected output to contain:\n%s\nGot:\n%s", tt.expectedOutput, output)
-				}
-			}
-		})
-	}
+		err := notebooksCmd.RunE(notebooksCmd, []string{})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "not authenticated")
+	})
 }
 
-func TestFormatNotebooks(t *testing.T) {
-	tests := []struct {
-		name           string
-		input          interface{}
-		expectedOutput string
-	}{
-		{
-			name: "valid notebooks response",
-			input: map[string]interface{}{
-				"notebooks": []interface{}{
-					map[string]interface{}{
-						"name":            "My Notebook",
-						"guid":            "abc123",
-						"defaultNotebook": false,
-					},
-				},
-			},
-			expectedOutput: "Found 1 notebook(s):\n\n1. My Notebook\n   GUID: abc123\n\n",
-		},
-		{
-			name:           "invalid data type",
-			input:          "invalid",
-			expectedOutput: `"invalid"`,
-		},
-		{
-			name: "missing notebooks array",
-			input: map[string]interface{}{
-				"other": "data",
-			},
-			expectedOutput: `{
-  "other": "data"
-}`,
-		},
+func TestNotebooksCmdConfiguration(t *testing.T) {
+	assert.Equal(t, "notebooks", notebooksCmd.Use)
+	assert.Equal(t, "List all notebooks", notebooksCmd.Short)
+	assert.NotNil(t, notebooksCmd.RunE)
+}
+
+func TestNotebooksCommandRegistration(t *testing.T) {
+	found := false
+	for _, cmd := range rootCmd.Commands() {
+		if cmd.Name() == "notebooks" {
+			found = true
+			assert.Equal(t, "List all notebooks", cmd.Short)
+			break
+		}
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := &cobra.Command{}
-			var buf bytes.Buffer
-			cmd.SetOut(&buf)
-
-			err := formatNotebooks(cmd, tt.input)
-			if err != nil {
-				t.Errorf("Unexpected error: %v", err)
-			}
-
-			output := buf.String()
-			if !strings.Contains(output, strings.TrimSpace(tt.expectedOutput)) {
-				t.Errorf("Expected output to contain:\n%s\nGot:\n%s", tt.expectedOutput, output)
-			}
-		})
-	}
+	assert.True(t, found, "notebooks command should be registered with root command")
 }

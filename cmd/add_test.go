@@ -2,18 +2,13 @@ package cmd
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
-	"path/filepath"
 	"testing"
-	"time"
 
+	"github.com/dreampuf/evernote-sdk-golang/edam"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/oauth2"
 )
 
 func TestAddCmdConfiguration(t *testing.T) {
@@ -38,80 +33,120 @@ func TestAddCmdFlagParsing(t *testing.T) {
 	assert.Equal(t, []string{"tag1", "tag2"}, addTags)
 }
 
-func TestAddHTTPRequest(t *testing.T) {
-	tempDir := t.TempDir()
-	originalConfigPath := configPath
-	configPath = filepath.Join(tempDir, "auth.json")
-	defer func() { configPath = originalConfigPath }()
+func TestAddCommand(t *testing.T) {
+	t.Run("successful note creation", func(t *testing.T) {
+		createdTitle := "Created Note"
+		createdGuid := edam.GUID("new-note-123")
 
-	testConfig := &Config{
-		ClientID:     "id",
-		ClientSecret: "secret",
-		Token: &oauth2.Token{
-			AccessToken: "token",
-			TokenType:   "Bearer",
-		},
-	}
-	testConfig.Token.Expiry = time.Now().Add(time.Hour)
-	require.NoError(t, saveConfig(testConfig))
+		mock := &mockNoteStore{
+			createdNote: &edam.Note{
+				Title: &createdTitle,
+				GUID:  &createdGuid,
+			},
+		}
+		cleanup := setMockNoteStore(mock)
+		defer cleanup()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/v1/notes", r.URL.Path)
-		assert.Equal(t, "Bearer token", r.Header.Get("Authorization"))
-		var body map[string]interface{}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		assert.Equal(t, "title text", body["title"])
-		assert.Equal(t, "body text", body["content"])
-		assert.Equal(t, "nb", body["notebook"])
-		tags, ok := body["tags"].([]interface{})
-		require.True(t, ok)
-		assert.Len(t, tags, 2)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"ok": "true"})
-	}))
-	defer server.Close()
+		addTitle = "Test Note"
+		addBody = "Test body content"
+		addNotebook = ""
+		addTags = nil
 
-	cmd := &cobra.Command{
-		RunE: func(cmd *cobra.Command, args []string) error {
-			token, err := checkAuth()
-			if err != nil {
-				return err
-			}
-			payload := map[string]interface{}{
-				"title":    addTitle,
-				"content":  addBody,
-				"notebook": addNotebook,
-				"tags":     addTags,
-			}
-			data, _ := json.Marshal(payload)
-			req, err := http.NewRequest("POST", server.URL+"/v1/notes", bytes.NewReader(data))
-			if err != nil {
-				return err
-			}
-			req.Header.Set("Authorization", "Bearer "+token)
-			req.Header.Set("Content-Type", "application/json")
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil {
-				return err
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusOK {
-				return fmt.Errorf("unexpected status: %s", resp.Status)
-			}
-			var dataResp interface{}
-			return json.NewDecoder(resp.Body).Decode(&dataResp)
-		},
-	}
-	cmd.Flags().StringVar(&addBody, "body", "", "")
-	cmd.Flags().StringVar(&addTitle, "title", "", "")
-	cmd.Flags().StringVar(&addNotebook, "notebook", "", "")
-	cmd.Flags().StringSliceVar(&addTags, "tags", nil, "")
+		var buf bytes.Buffer
+		addCmd.SetOut(&buf)
+		jsonFlag = false
+		err := addCmd.RunE(addCmd, []string{})
+		require.NoError(t, err)
 
-	cmd.SetArgs([]string{"--body=body text", "--title=title text", "--notebook=nb", "--tags=tag1,tag2"})
+		output := buf.String()
+		assert.Contains(t, output, "Note created: Created Note")
+		assert.Contains(t, output, "GUID: new-note-123")
+	})
 
-	err := cmd.Execute()
-	require.NoError(t, err)
+	t.Run("note creation with JSON output", func(t *testing.T) {
+		createdTitle := "JSON Note"
+		createdGuid := edam.GUID("json-note-123")
+
+		mock := &mockNoteStore{
+			createdNote: &edam.Note{
+				Title: &createdTitle,
+				GUID:  &createdGuid,
+			},
+		}
+		cleanup := setMockNoteStore(mock)
+		defer cleanup()
+
+		addTitle = "JSON Note"
+		addBody = "Test body"
+		addNotebook = ""
+		addTags = nil
+
+		var buf bytes.Buffer
+		addCmd.SetOut(&buf)
+		jsonFlag = true
+		err := addCmd.RunE(addCmd, []string{})
+		require.NoError(t, err)
+
+		output := buf.String()
+		assert.Contains(t, output, "JSON Note")
+		assert.Contains(t, output, "json-note-123")
+	})
+
+	t.Run("title required", func(t *testing.T) {
+		addTitle = ""
+		addBody = "body"
+
+		err := addCmd.RunE(addCmd, []string{})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "--title is required")
+	})
+
+	t.Run("API error", func(t *testing.T) {
+		mock := &mockNoteStore{
+			createdNote: &edam.Note{},
+			err:         fmt.Errorf("quota exceeded"),
+		}
+		cleanup := setMockNoteStore(mock)
+		defer cleanup()
+
+		addTitle = "Test"
+		addBody = "body"
+
+		err := addCmd.RunE(addCmd, []string{})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "quota exceeded")
+	})
+
+	t.Run("auth error returns error", func(t *testing.T) {
+		mock := &mockNoteStore{err: fmt.Errorf("not authenticated")}
+		cleanup := setMockNoteStore(mock)
+		defer cleanup()
+
+		addTitle = "Test"
+		err := addCmd.RunE(addCmd, []string{})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "not authenticated")
+	})
+}
+
+func TestWrapENML(t *testing.T) {
+	t.Run("plain text", func(t *testing.T) {
+		result := wrapENML("Hello world")
+		assert.Contains(t, result, "<en-note>Hello world</en-note>")
+		assert.Contains(t, result, "<?xml version")
+		assert.Contains(t, result, "<!DOCTYPE en-note")
+	})
+
+	t.Run("text with special characters", func(t *testing.T) {
+		result := wrapENML("Hello <world> & \"friends\"")
+		assert.Contains(t, result, "Hello &lt;world&gt; &amp; &#34;friends&#34;")
+		assert.NotContains(t, result, "<world>")
+	})
+
+	t.Run("empty body", func(t *testing.T) {
+		result := wrapENML("")
+		assert.Contains(t, result, "<en-note></en-note>")
+	})
 }
 
 func TestAddCmdRegistration(t *testing.T) {

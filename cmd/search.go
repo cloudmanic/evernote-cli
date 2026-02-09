@@ -1,57 +1,75 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/url"
+	"strings"
+	"time"
 
+	"github.com/dreampuf/evernote-sdk-golang/edam"
 	"github.com/spf13/cobra"
 )
 
+// searchCmd searches notes by a query string using the Evernote search grammar.
 var searchCmd = &cobra.Command{
 	Use:   "search [query]",
 	Short: "Search notes",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Get OAuth 1.0a client
-		client, err := getOAuth1Client()
-		if err != nil {
-			return err
-		}
-		
-		q := url.QueryEscape(args[0])
-		req, err := http.NewRequest("GET", "https://api.evernote.com/v1/search?query="+q, nil)
+		ns, token, err := getNoteStoreFunc()
 		if err != nil {
 			return err
 		}
 
-		resp, err := client.Do(req)
-		if err != nil {
-			return err
+		query := strings.Join(args, " ")
+		includeTitle := true
+		includeCreated := true
+		includeUpdated := true
+		includeNotebookGuid := true
+
+		filter := &edam.NoteFilter{
+			Words: &query,
 		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("unexpected status: %s", resp.Status)
+		resultSpec := &edam.NotesMetadataResultSpec{
+			IncludeTitle:        &includeTitle,
+			IncludeCreated:      &includeCreated,
+			IncludeUpdated:      &includeUpdated,
+			IncludeNotebookGuid: &includeNotebookGuid,
 		}
 
-		var data interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-			return err
+		results, err := ns.FindNotesMetadata(context.Background(), token, filter, 0, 100, resultSpec)
+		if err != nil {
+			return fmt.Errorf("failed to search notes: %w", err)
 		}
 
 		if jsonFlag {
 			enc := json.NewEncoder(cmd.OutOrStdout())
 			enc.SetIndent("", "  ")
-			return enc.Encode(data)
+			return enc.Encode(results)
 		}
 
-		// naive formatting
-		bytes, err := json.MarshalIndent(data, "", "  ")
-		if err != nil {
-			return err
+		notes := results.GetNotes()
+		if len(notes) == 0 {
+			fmt.Fprintln(cmd.OutOrStdout(), "No notes found.")
+			return nil
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "%s\n", string(bytes))
+
+		fmt.Fprintf(cmd.OutOrStdout(), "Found %d note(s):\n\n", results.GetTotalNotes())
+		for i, note := range notes {
+			fmt.Fprintf(cmd.OutOrStdout(), "%d. %s\n", i+1, note.GetTitle())
+			fmt.Fprintf(cmd.OutOrStdout(), "   GUID: %s\n", note.GetGUID())
+			if note.GetCreated() != 0 {
+				created := time.Unix(int64(note.GetCreated())/1000, 0)
+				fmt.Fprintf(cmd.OutOrStdout(), "   Created: %s\n", created.Format("2006-01-02 15:04:05"))
+			}
+			if note.GetUpdated() != 0 {
+				updated := time.Unix(int64(note.GetUpdated())/1000, 0)
+				fmt.Fprintf(cmd.OutOrStdout(), "   Updated: %s\n", updated.Format("2006-01-02 15:04:05"))
+			}
+			fmt.Fprintln(cmd.OutOrStdout())
+		}
+
 		return nil
 	},
 }

@@ -1,57 +1,109 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
+	"github.com/dreampuf/evernote-sdk-golang/edam"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/oauth2"
 )
 
-func TestLoadConfig(t *testing.T) {
-	// Create a temporary directory for test config files
-	tempDir, err := os.MkdirTemp("", "evernote-cli-test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+// mockNoteStore implements the noteStoreClient interface for testing.
+type mockNoteStore struct {
+	notebooks   []*edam.Notebook
+	tags        []*edam.Tag
+	notes       *edam.NotesMetadataList
+	createdNote *edam.Note
+	gotNote     *edam.Note
+	resource    *edam.Resource
+	err         error
+}
 
-	// Save original configPath and restore after test
+// ListNotebooks returns the mock notebooks.
+func (m *mockNoteStore) ListNotebooks(ctx context.Context, authenticationToken string) ([]*edam.Notebook, error) {
+	return m.notebooks, m.err
+}
+
+// ListTags returns the mock tags.
+func (m *mockNoteStore) ListTags(ctx context.Context, authenticationToken string) ([]*edam.Tag, error) {
+	return m.tags, m.err
+}
+
+// FindNotesMetadata returns the mock note metadata.
+func (m *mockNoteStore) FindNotesMetadata(ctx context.Context, authenticationToken string, filter *edam.NoteFilter, offset int32, maxNotes int32, resultSpec *edam.NotesMetadataResultSpec) (*edam.NotesMetadataList, error) {
+	return m.notes, m.err
+}
+
+// CreateNote returns the mock created note.
+func (m *mockNoteStore) CreateNote(ctx context.Context, authenticationToken string, note *edam.Note) (*edam.Note, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	if m.createdNote != nil {
+		return m.createdNote, nil
+	}
+	return note, nil
+}
+
+// GetNote returns the mock note.
+func (m *mockNoteStore) GetNote(ctx context.Context, authenticationToken string, guid edam.GUID, withContent bool, withResourcesData bool, withResourcesRecognition bool, withResourcesAlternateData bool) (*edam.Note, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.gotNote, nil
+}
+
+// GetResource returns the mock resource.
+func (m *mockNoteStore) GetResource(ctx context.Context, authenticationToken string, guid edam.GUID, withData bool, withRecognition bool, withAttributes bool, withAlternateData bool) (*edam.Resource, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.resource, nil
+}
+
+// setMockNoteStore overrides getNoteStoreFunc for testing and returns a cleanup function.
+func setMockNoteStore(mock *mockNoteStore) func() {
+	original := getNoteStoreFunc
+	getNoteStoreFunc = func() (noteStoreClient, string, error) {
+		if mock.err != nil && mock.notebooks == nil && mock.tags == nil && mock.notes == nil && mock.createdNote == nil && mock.gotNote == nil && mock.resource == nil {
+			return nil, "", mock.err
+		}
+		return mock, "test-token", nil
+	}
+	return func() { getNoteStoreFunc = original }
+}
+
+func TestLoadConfig(t *testing.T) {
+	tempDir := t.TempDir()
 	originalConfigPath := configPath
 	defer func() { configPath = originalConfigPath }()
 
 	t.Run("successful load", func(t *testing.T) {
 		configPath = filepath.Join(tempDir, "test-config.json")
 
-		// Create a test config
 		testConfig := Config{
 			ClientID:     "test-client-id",
 			ClientSecret: "test-client-secret",
-			Token: &oauth2.Token{
-				AccessToken:  "test-access-token",
-				TokenType:    "Bearer",
-				RefreshToken: "test-refresh-token",
-				Expiry:       time.Now().Add(time.Hour),
-			},
+			AuthToken:    "test-auth-token",
+			NoteStoreURL: "https://www.evernote.com/shard/s1/notestore",
 		}
 
-		// Write the test config to file
 		data, err := json.MarshalIndent(testConfig, "", "  ")
 		require.NoError(t, err)
 		err = os.WriteFile(configPath, data, 0600)
 		require.NoError(t, err)
 
-		// Test loading the config
 		config, err := loadConfig()
 		require.NoError(t, err)
 		assert.Equal(t, "test-client-id", config.ClientID)
 		assert.Equal(t, "test-client-secret", config.ClientSecret)
-		assert.NotNil(t, config.Token)
-		assert.Equal(t, "test-access-token", config.Token.AccessToken)
-		assert.Equal(t, "Bearer", config.Token.TokenType)
-		assert.Equal(t, "test-refresh-token", config.Token.RefreshToken)
+		assert.Equal(t, "test-auth-token", config.AuthToken)
+		assert.Equal(t, "https://www.evernote.com/shard/s1/notestore", config.NoteStoreURL)
 	})
 
 	t.Run("file does not exist", func(t *testing.T) {
@@ -66,8 +118,7 @@ func TestLoadConfig(t *testing.T) {
 	t.Run("invalid JSON", func(t *testing.T) {
 		configPath = filepath.Join(tempDir, "invalid-config.json")
 
-		// Write invalid JSON
-		err = os.WriteFile(configPath, []byte("invalid json content"), 0600)
+		err := os.WriteFile(configPath, []byte("invalid json content"), 0600)
 		require.NoError(t, err)
 
 		config, err := loadConfig()
@@ -78,8 +129,7 @@ func TestLoadConfig(t *testing.T) {
 	t.Run("empty file", func(t *testing.T) {
 		configPath = filepath.Join(tempDir, "empty-config.json")
 
-		// Write empty file
-		err = os.WriteFile(configPath, []byte(""), 0600)
+		err := os.WriteFile(configPath, []byte(""), 0600)
 		require.NoError(t, err)
 
 		config, err := loadConfig()
@@ -89,12 +139,7 @@ func TestLoadConfig(t *testing.T) {
 }
 
 func TestSaveConfig(t *testing.T) {
-	// Create a temporary directory for test config files
-	tempDir, err := os.MkdirTemp("", "evernote-cli-test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
-
-	// Save original configPath and restore after test
+	tempDir := t.TempDir()
 	originalConfigPath := configPath
 	defer func() { configPath = originalConfigPath }()
 
@@ -104,21 +149,15 @@ func TestSaveConfig(t *testing.T) {
 		testConfig := &Config{
 			ClientID:     "test-client-id",
 			ClientSecret: "test-client-secret",
-			Token: &oauth2.Token{
-				AccessToken:  "test-access-token",
-				TokenType:    "Bearer",
-				RefreshToken: "test-refresh-token",
-				Expiry:       time.Now().Add(time.Hour),
-			},
+			AuthToken:    "test-auth-token",
+			NoteStoreURL: "https://www.evernote.com/shard/s1/notestore",
 		}
 
 		err := saveConfig(testConfig)
 		require.NoError(t, err)
 
-		// Verify the file was created
 		assert.FileExists(t, configPath)
 
-		// Verify the content is correct
 		data, err := os.ReadFile(configPath)
 		require.NoError(t, err)
 
@@ -128,7 +167,8 @@ func TestSaveConfig(t *testing.T) {
 
 		assert.Equal(t, testConfig.ClientID, savedConfig.ClientID)
 		assert.Equal(t, testConfig.ClientSecret, savedConfig.ClientSecret)
-		assert.Equal(t, testConfig.Token.AccessToken, savedConfig.Token.AccessToken)
+		assert.Equal(t, testConfig.AuthToken, savedConfig.AuthToken)
+		assert.Equal(t, testConfig.NoteStoreURL, savedConfig.NoteStoreURL)
 	})
 
 	t.Run("save config without token", func(t *testing.T) {
@@ -137,13 +177,11 @@ func TestSaveConfig(t *testing.T) {
 		testConfig := &Config{
 			ClientID:     "test-client-id",
 			ClientSecret: "test-client-secret",
-			Token:        nil,
 		}
 
 		err := saveConfig(testConfig)
 		require.NoError(t, err)
 
-		// Verify the file was created and token is omitted
 		data, err := os.ReadFile(configPath)
 		require.NoError(t, err)
 
@@ -153,12 +191,10 @@ func TestSaveConfig(t *testing.T) {
 
 		assert.Equal(t, testConfig.ClientID, savedConfig.ClientID)
 		assert.Equal(t, testConfig.ClientSecret, savedConfig.ClientSecret)
-		assert.Nil(t, savedConfig.Token)
+		assert.Empty(t, savedConfig.AuthToken)
 	})
 
 	t.Run("save to protected directory", func(t *testing.T) {
-		// This test might fail on systems where the directory is writable (for example when running as root).
-		// Skip to avoid false failures in such cases.
 		if os.Geteuid() == 0 {
 			t.Skip("skipping permissions test when running as root")
 		}
@@ -170,148 +206,102 @@ func TestSaveConfig(t *testing.T) {
 		}
 
 		err := saveConfig(testConfig)
-		// We expect this to fail due to permission issues
 		assert.Error(t, err)
 	})
 }
 
-func TestCheckAuth(t *testing.T) {
-	// Create a temporary directory for test config files
-	tempDir, err := os.MkdirTemp("", "evernote-cli-test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
-
-	// Save original configPath and restore after test
+func TestGetNoteStoreFunc_NoConfig(t *testing.T) {
+	tempDir := t.TempDir()
 	originalConfigPath := configPath
 	defer func() { configPath = originalConfigPath }()
 
-	t.Run("valid token", func(t *testing.T) {
-		configPath = filepath.Join(tempDir, "valid-token-config.json")
+	configPath = filepath.Join(tempDir, "nonexistent.json")
 
-		// Create config with valid token
-		testConfig := Config{
-			ClientID:     "test-client-id",
-			ClientSecret: "test-client-secret",
-			Token: &oauth2.Token{
-				AccessToken: "test-access-token",
-				TokenType:   "Bearer",
-				Expiry:      time.Now().Add(time.Hour), // Valid for 1 hour
-			},
-		}
-
-		data, err := json.MarshalIndent(testConfig, "", "  ")
-		require.NoError(t, err)
-		err = os.WriteFile(configPath, data, 0600)
-		require.NoError(t, err)
-
-		token, err := checkAuth()
-		require.NoError(t, err)
-		assert.Equal(t, "test-access-token", token)
-	})
-
-	t.Run("expired token", func(t *testing.T) {
-		configPath = filepath.Join(tempDir, "expired-token-config.json")
-
-		// Create config with expired token
-		testConfig := Config{
-			ClientID:     "test-client-id",
-			ClientSecret: "test-client-secret",
-			Token: &oauth2.Token{
-				AccessToken: "expired-access-token",
-				TokenType:   "Bearer",
-				Expiry:      time.Now().Add(-time.Hour), // Expired 1 hour ago
-			},
-		}
-
-		data, err := json.MarshalIndent(testConfig, "", "  ")
-		require.NoError(t, err)
-		err = os.WriteFile(configPath, data, 0600)
-		require.NoError(t, err)
-
-		token, err := checkAuth()
-		assert.Error(t, err)
-		assert.Empty(t, token)
-		assert.Contains(t, err.Error(), "no valid token found")
-	})
-
-	t.Run("nil token", func(t *testing.T) {
-		configPath = filepath.Join(tempDir, "nil-token-config.json")
-
-		// Create config without token
-		testConfig := Config{
-			ClientID:     "test-client-id",
-			ClientSecret: "test-client-secret",
-			Token:        nil,
-		}
-
-		data, err := json.MarshalIndent(testConfig, "", "  ")
-		require.NoError(t, err)
-		err = os.WriteFile(configPath, data, 0600)
-		require.NoError(t, err)
-
-		token, err := checkAuth()
-		assert.Error(t, err)
-		assert.Empty(t, token)
-		assert.Contains(t, err.Error(), "no valid token found")
-	})
-
-	t.Run("config file does not exist", func(t *testing.T) {
-		configPath = filepath.Join(tempDir, "nonexistent-config.json")
-
-		token, err := checkAuth()
-		assert.Error(t, err)
-		assert.Empty(t, token)
-		assert.Contains(t, err.Error(), "could not read config")
-	})
+	ns, token, err := getDefaultNoteStore()
+	assert.Error(t, err)
+	assert.Nil(t, ns)
+	assert.Empty(t, token)
+	assert.Contains(t, err.Error(), "could not read config")
 }
 
-func TestConfig_Struct(t *testing.T) {
-	t.Run("json marshaling and unmarshaling", func(t *testing.T) {
-		original := Config{
-			ClientID:     "test-id",
-			ClientSecret: "test-secret",
-			Token: &oauth2.Token{
-				AccessToken:  "access-token",
-				RefreshToken: "refresh-token",
-				TokenType:    "Bearer",
-				Expiry:       time.Date(2024, 12, 31, 23, 59, 59, 0, time.UTC),
-			},
-		}
+func TestGetNoteStoreFunc_NoToken(t *testing.T) {
+	tempDir := t.TempDir()
+	originalConfigPath := configPath
+	defer func() { configPath = originalConfigPath }()
 
-		// Marshal to JSON
-		data, err := json.Marshal(original)
-		require.NoError(t, err)
+	configPath = filepath.Join(tempDir, "no-token.json")
+	cfg := &Config{ClientID: "id", ClientSecret: "secret"}
+	require.NoError(t, saveConfig(cfg))
 
-		// Unmarshal back
-		var unmarshaled Config
-		err = json.Unmarshal(data, &unmarshaled)
-		require.NoError(t, err)
+	ns, token, err := getDefaultNoteStore()
+	assert.Error(t, err)
+	assert.Nil(t, ns)
+	assert.Empty(t, token)
+	assert.Contains(t, err.Error(), "not authenticated")
+}
 
-		// Verify all fields
-		assert.Equal(t, original.ClientID, unmarshaled.ClientID)
-		assert.Equal(t, original.ClientSecret, unmarshaled.ClientSecret)
-		assert.NotNil(t, unmarshaled.Token)
-		assert.Equal(t, original.Token.AccessToken, unmarshaled.Token.AccessToken)
-		assert.Equal(t, original.Token.RefreshToken, unmarshaled.Token.RefreshToken)
-		assert.Equal(t, original.Token.TokenType, unmarshaled.Token.TokenType)
-		// Note: Time comparison might need to account for precision differences
-		assert.True(t, original.Token.Expiry.Equal(unmarshaled.Token.Expiry))
+func TestConfig_JSONRoundTrip(t *testing.T) {
+	original := Config{
+		ClientID:     "test-id",
+		ClientSecret: "test-secret",
+		AuthToken:    "S=s1:U=abc:E=123:C=456:P=1:A=test:V=2:H=abc123",
+		NoteStoreURL: "https://www.evernote.com/shard/s1/notestore",
+	}
+
+	data, err := json.Marshal(original)
+	require.NoError(t, err)
+
+	var unmarshaled Config
+	err = json.Unmarshal(data, &unmarshaled)
+	require.NoError(t, err)
+
+	assert.Equal(t, original.ClientID, unmarshaled.ClientID)
+	assert.Equal(t, original.ClientSecret, unmarshaled.ClientSecret)
+	assert.Equal(t, original.AuthToken, unmarshaled.AuthToken)
+	assert.Equal(t, original.NoteStoreURL, unmarshaled.NoteStoreURL)
+}
+
+func TestConfig_EmptyFieldsOmission(t *testing.T) {
+	config := Config{
+		ClientID:     "test-id",
+		ClientSecret: "test-secret",
+	}
+
+	data, err := json.Marshal(config)
+	require.NoError(t, err)
+
+	jsonStr := string(data)
+	assert.Contains(t, jsonStr, "client_id")
+	assert.Contains(t, jsonStr, "client_secret")
+}
+
+func TestMockNoteStore(t *testing.T) {
+	t.Run("mock returns configured error", func(t *testing.T) {
+		mock := &mockNoteStore{err: fmt.Errorf("connection failed")}
+		cleanup := setMockNoteStore(mock)
+		defer cleanup()
+
+		_, _, err := getNoteStoreFunc()
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "connection failed")
 	})
 
-	t.Run("json omitempty for nil token", func(t *testing.T) {
-		config := Config{
-			ClientID:     "test-id",
-			ClientSecret: "test-secret",
-			Token:        nil,
+	t.Run("mock returns configured notebooks", func(t *testing.T) {
+		name := "Test Notebook"
+		guid := edam.GUID("nb-123")
+		mock := &mockNoteStore{
+			notebooks: []*edam.Notebook{{Name: &name, GUID: &guid}},
 		}
+		cleanup := setMockNoteStore(mock)
+		defer cleanup()
 
-		data, err := json.Marshal(config)
+		ns, token, err := getNoteStoreFunc()
 		require.NoError(t, err)
+		assert.Equal(t, "test-token", token)
 
-		// Should not contain "token" field when nil
-		jsonStr := string(data)
-		assert.NotContains(t, jsonStr, "token")
-		assert.Contains(t, jsonStr, "client_id")
-		assert.Contains(t, jsonStr, "client_secret")
+		notebooks, err := ns.ListNotebooks(context.Background(), token)
+		require.NoError(t, err)
+		assert.Len(t, notebooks, 1)
+		assert.Equal(t, "Test Notebook", notebooks[0].GetName())
 	})
 }

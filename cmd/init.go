@@ -8,17 +8,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// initCmd prompts for API credentials and runs the OAuth flow.
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize credentials and authenticate",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		reader := bufio.NewReader(cmd.InOrStdin())
-		fmt.Fprint(cmd.OutOrStdout(), "Evernote Client ID: ")
+		fmt.Fprint(cmd.OutOrStdout(), "Evernote Consumer Key: ")
 		id, err := reader.ReadString('\n')
 		if err != nil {
 			return err
 		}
-		fmt.Fprint(cmd.OutOrStdout(), "Evernote Client Secret: ")
+		fmt.Fprint(cmd.OutOrStdout(), "Evernote Consumer Secret: ")
 		secret, err := reader.ReadString('\n')
 		if err != nil {
 			return err
@@ -26,13 +27,17 @@ var initCmd = &cobra.Command{
 		id = strings.TrimSpace(id)
 		secret = strings.TrimSpace(secret)
 
-		cfg := &Config{ClientID: id, ClientSecret: secret}
-		token, err := runAuthFlow(id, secret)
+		token, noteStoreURL, err := runAuthFlow(id, secret)
 		if err != nil {
 			return err
 		}
-		cfg.OAuth1Token = token.Token
-		cfg.OAuth1TokenSecret = token.TokenSecret
+
+		cfg := &Config{
+			ClientID:     id,
+			ClientSecret: secret,
+			AuthToken:    token,
+			NoteStoreURL: noteStoreURL,
+		}
 		if err := saveConfig(cfg); err != nil {
 			return err
 		}

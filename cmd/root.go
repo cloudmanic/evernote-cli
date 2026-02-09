@@ -4,27 +4,65 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 
-	"github.com/dghubble/oauth1"
+	"github.com/dreampuf/evernote-sdk-golang/client"
+	"github.com/dreampuf/evernote-sdk-golang/edam"
 	"github.com/spf13/cobra"
-	"golang.org/x/oauth2"
 )
 
 // jsonFlag is used by subcommands to output JSON.
 var jsonFlag bool
 var configPath = filepath.Join(os.Getenv("HOME"), ".config", "evernote", "auth.json")
 
+// Config holds the Evernote API credentials and auth token.
 type Config struct {
-	ClientID          string        `json:"client_id"`
-	ClientSecret      string        `json:"client_secret"`
-	Token             *oauth2.Token `json:"token,omitempty"` // Keep for backwards compatibility
-	OAuth1Token       string        `json:"oauth1_token,omitempty"`
-	OAuth1TokenSecret string        `json:"oauth1_token_secret,omitempty"`
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+	AuthToken    string `json:"auth_token"`
+	NoteStoreURL string `json:"note_store_url"`
 }
 
+// noteStoreClient defines the interface for Evernote NoteStore operations.
+type noteStoreClient interface {
+	ListNotebooks(ctx context.Context, authenticationToken string) ([]*edam.Notebook, error)
+	ListTags(ctx context.Context, authenticationToken string) ([]*edam.Tag, error)
+	FindNotesMetadata(ctx context.Context, authenticationToken string, filter *edam.NoteFilter, offset int32, maxNotes int32, resultSpec *edam.NotesMetadataResultSpec) (*edam.NotesMetadataList, error)
+	CreateNote(ctx context.Context, authenticationToken string, note *edam.Note) (*edam.Note, error)
+	GetNote(ctx context.Context, authenticationToken string, guid edam.GUID, withContent bool, withResourcesData bool, withResourcesRecognition bool, withResourcesAlternateData bool) (*edam.Note, error)
+	GetResource(ctx context.Context, authenticationToken string, guid edam.GUID, withData bool, withRecognition bool, withAttributes bool, withAlternateData bool) (*edam.Resource, error)
+}
+
+// getNoteStoreFunc returns a NoteStore client and auth token. Can be overridden in tests.
+var getNoteStoreFunc = getDefaultNoteStore
+
+// getDefaultNoteStore loads config and creates a NoteStore client using the Evernote SDK.
+func getDefaultNoteStore() (noteStoreClient, string, error) {
+	cfg, err := loadConfig()
+	if err != nil {
+		return nil, "", fmt.Errorf("could not read config: %w", err)
+	}
+	if cfg.AuthToken == "" {
+		return nil, "", fmt.Errorf("not authenticated, run 'evernote-cli init' or 'evernote-cli auth'")
+	}
+
+	c := client.NewClient(cfg.ClientID, cfg.ClientSecret, client.PRODUCTION)
+
+	var ns *edam.NoteStoreClient
+	if cfg.NoteStoreURL != "" {
+		ns, err = c.GetNoteStoreWithURL(cfg.NoteStoreURL)
+	} else {
+		ns, err = c.GetNoteStore(context.Background(), cfg.AuthToken)
+	}
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to connect to Evernote: %w", err)
+	}
+
+	return ns, cfg.AuthToken, nil
+}
+
+// loadConfig reads the config file from disk.
 func loadConfig() (*Config, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -37,6 +75,7 @@ func loadConfig() (*Config, error) {
 	return &c, nil
 }
 
+// saveConfig writes the config file to disk with secure permissions.
 func saveConfig(c *Config) error {
 	os.MkdirAll(filepath.Dir(configPath), 0700)
 	data, err := json.MarshalIndent(c, "", "  ")
@@ -46,7 +85,7 @@ func saveConfig(c *Config) error {
 	return os.WriteFile(configPath, data, 0600)
 }
 
-// rootCmd is the main command when called without any subcommands
+// rootCmd is the main command when called without any subcommands.
 var rootCmd = &cobra.Command{
 	Use:   "evernote-cli",
 	Short: "A CLI tool to interact with Evernote",
@@ -59,58 +98,4 @@ func Execute() error {
 
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&jsonFlag, "json", false, "output in JSON format")
-}
-
-// getOAuth1Config returns an OAuth1 config with the stored credentials
-func getOAuth1Config() (*oauth1.Config, *oauth1.Token, error) {
-	cfg, err := loadConfig()
-	if err != nil {
-		return nil, nil, fmt.Errorf("could not read config: %w", err)
-	}
-
-	if cfg.OAuth1Token == "" {
-		return nil, nil, fmt.Errorf("no valid OAuth 1.0a token found, run 'evernote-cli auth'")
-	}
-
-	config := oauth1.NewConfig(cfg.ClientID, cfg.ClientSecret)
-	config.Endpoint = oauth1.Endpoint{
-		RequestTokenURL: requestTokenURL,
-		AuthorizeURL:    authorizeURL,
-		AccessTokenURL:  accessTokenURL,
-	}
-
-	token := oauth1.NewToken(cfg.OAuth1Token, cfg.OAuth1TokenSecret)
-
-	return config, token, nil
-}
-
-// Legacy function for backwards compatibility
-func checkAuth() (string, error) {
-	cfg, err := loadConfig()
-	if err != nil {
-		return "", fmt.Errorf("could not read config: %w", err)
-	}
-
-	// Check for OAuth 1.0a token first
-	if cfg.OAuth1Token != "" {
-		return cfg.OAuth1Token, nil
-	}
-
-	// Fall back to OAuth2 token for backwards compatibility
-	if cfg.Token != nil && cfg.Token.Valid() {
-		return cfg.Token.AccessToken, nil
-	}
-
-	return "", fmt.Errorf("no valid token found, run 'evernote-cli auth'")
-}
-
-// getOAuth1Client returns an HTTP client configured for OAuth 1.0a signed requests
-func getOAuth1Client() (*http.Client, error) {
-	config, token, err := getOAuth1Config()
-	if err != nil {
-		return nil, err
-	}
-	
-	// Create context and return client
-	return config.Client(context.Background(), token), nil
 }

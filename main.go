@@ -1,9 +1,15 @@
 package main
 
-import "github.com/cloudmanic/evernote-cli/cmd"
+import (
+	"fmt"
+	"os"
+
+	"github.com/cloudmanic/evernote-cli/cmd"
+)
 
 func main() {
 	if err := cmd.Execute(); err != nil {
-		panic(err)
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 }
