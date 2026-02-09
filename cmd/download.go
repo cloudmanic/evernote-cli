@@ -38,8 +38,7 @@ var downloadCmd = &cobra.Command{
 		if outputPath == "" {
 			if resource.GetAttributes() != nil && resource.GetAttributes().GetFileName() != "" {
 				// Sanitize filename to prevent path traversal attacks
-				filename := filepath.Base(resource.GetAttributes().GetFileName())
-				outputPath = filename
+				outputPath = filepath.Base(resource.GetAttributes().GetFileName())
 			} else {
 				outputPath = string(guid)
 			}

@@ -89,7 +89,7 @@ func openBrowser(urlStr string) {
 		// Invalid URL, don't attempt to open
 		return
 	}
-	
+
 	// Only allow http and https schemes
 	if !strings.EqualFold(parsedURL.Scheme, "http") && !strings.EqualFold(parsedURL.Scheme, "https") {
 		return
