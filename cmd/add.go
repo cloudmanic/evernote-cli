@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"strings"
 
 	"github.com/dreampuf/evernote-sdk-golang/edam"
 	"github.com/spf13/cobra"
@@ -15,6 +16,7 @@ var (
 	addBody     string
 	addNotebook string
 	addTags     []string
+	addAttach   []string
 )
 
 // wrapENML wraps plain text content in the required Evernote ENML format.
@@ -39,10 +41,29 @@ var addCmd = &cobra.Command{
 			return err
 		}
 
+		// Build resources from attached files
+		var resources []*edam.Resource
+		var mediaTags []string
+		for _, filePath := range addAttach {
+			res, hash, err := buildResource(filePath)
+			if err != nil {
+				return err
+			}
+			resources = append(resources, res)
+			mediaTags = append(mediaTags, buildMediaTag(hash, res.GetMime()))
+		}
+
+		// Build ENML content with optional media tags for attachments
 		content := wrapENML(addBody)
+		if len(mediaTags) > 0 {
+			mediaBlock := strings.Join(mediaTags, "")
+			content = strings.Replace(content, "</en-note>", mediaBlock+"</en-note>", 1)
+		}
+
 		note := &edam.Note{
-			Title:   &addTitle,
-			Content: &content,
+			Title:     &addTitle,
+			Content:   &content,
+			Resources: resources,
 		}
 
 		if addNotebook != "" {
@@ -74,5 +95,6 @@ func init() {
 	addCmd.Flags().StringVar(&addBody, "body", "", "body of the note")
 	addCmd.Flags().StringVar(&addNotebook, "notebook", "", "notebook GUID")
 	addCmd.Flags().StringSliceVar(&addTags, "tags", nil, "comma separated list of tag names")
+	addCmd.Flags().StringSliceVar(&addAttach, "attach", nil, "file paths to attach to the note")
 	rootCmd.AddCommand(addCmd)
 }
