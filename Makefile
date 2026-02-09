@@ -9,11 +9,11 @@ VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
 ## build: Build the binary for the current platform
 build:
-	go build -o $(BINARY_NAME) .
+	go build -ldflags="-X github.com/cloudmanic/evernote-cli/cmd.Version=$(VERSION)" -o $(BINARY_NAME) .
 
 ## install: Build and install the binary to GOPATH/bin
 install:
-	go install .
+	go install -ldflags="-X github.com/cloudmanic/evernote-cli/cmd.Version=$(VERSION)" .
 
 ## test: Run all tests
 test:
@@ -52,12 +52,12 @@ clean:
 
 ## cross-build: Build for all release platforms
 cross-build: clean
-	GOOS=linux   GOARCH=amd64 go build -o $(BINARY_NAME)-linux-amd64 .
-	GOOS=linux   GOARCH=arm64 go build -o $(BINARY_NAME)-linux-arm64 .
-	GOOS=darwin  GOARCH=amd64 go build -o $(BINARY_NAME)-darwin-amd64 .
-	GOOS=darwin  GOARCH=arm64 go build -o $(BINARY_NAME)-darwin-arm64 .
-	GOOS=windows GOARCH=amd64 go build -o $(BINARY_NAME)-windows-amd64.exe .
-	GOOS=windows GOARCH=arm64 go build -o $(BINARY_NAME)-windows-arm64.exe .
+	GOOS=linux   GOARCH=amd64 go build -ldflags="-X github.com/cloudmanic/evernote-cli/cmd.Version=$(VERSION)" -o $(BINARY_NAME)-linux-amd64 .
+	GOOS=linux   GOARCH=arm64 go build -ldflags="-X github.com/cloudmanic/evernote-cli/cmd.Version=$(VERSION)" -o $(BINARY_NAME)-linux-arm64 .
+	GOOS=darwin  GOARCH=amd64 go build -ldflags="-X github.com/cloudmanic/evernote-cli/cmd.Version=$(VERSION)" -o $(BINARY_NAME)-darwin-amd64 .
+	GOOS=darwin  GOARCH=arm64 go build -ldflags="-X github.com/cloudmanic/evernote-cli/cmd.Version=$(VERSION)" -o $(BINARY_NAME)-darwin-arm64 .
+	GOOS=windows GOARCH=amd64 go build -ldflags="-X github.com/cloudmanic/evernote-cli/cmd.Version=$(VERSION)" -o $(BINARY_NAME)-windows-amd64.exe .
+	GOOS=windows GOARCH=arm64 go build -ldflags="-X github.com/cloudmanic/evernote-cli/cmd.Version=$(VERSION)" -o $(BINARY_NAME)-windows-arm64.exe .
 
 ## help: Show this help message
 help:

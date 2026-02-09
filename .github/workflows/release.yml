@@ -76,7 +76,7 @@ jobs:
           fi
           
           echo "Building for $GOOS/$GOARCH..."
-          GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w" -o "dist/${output_name}" .
+          GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w -X github.com/cloudmanic/evernote-cli/cmd.Version=${{ steps.version.outputs.version }}" -o "dist/${output_name}" .
           
           # Create compressed archives for easier distribution
           if [ "$GOOS" = "windows" ]; then
