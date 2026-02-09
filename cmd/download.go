@@ -30,7 +30,7 @@ var downloadCmd = &cobra.Command{
 		// Get resource metadata to determine filename
 		resource, err := ns.GetResource(context.Background(), token, guid, true, false, true, false)
 		if err != nil {
-			return fmt.Errorf("failed to get resource: %w", err)
+			return fmt.Errorf("failed to get resource: %w", formatAPIError(err))
 		}
 
 		// Determine output filename

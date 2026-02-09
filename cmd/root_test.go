@@ -317,3 +317,87 @@ func TestMockNoteStore(t *testing.T) {
 		assert.Equal(t, "Test Notebook", notebooks[0].GetName())
 	})
 }
+
+func TestFormatAPIError(t *testing.T) {
+	t.Run("rate limit error", func(t *testing.T) {
+		duration := int32(60)
+		err := &edam.EDAMSystemException{
+			ErrorCode:         edam.EDAMErrorCode_RATE_LIMIT_REACHED,
+			RateLimitDuration: &duration,
+		}
+		result := formatAPIError(err)
+		assert.Contains(t, result.Error(), "rate limited by Evernote")
+		assert.Contains(t, result.Error(), "60 seconds")
+	})
+
+	t.Run("system error with message", func(t *testing.T) {
+		msg := "internal failure"
+		err := &edam.EDAMSystemException{
+			ErrorCode: edam.EDAMErrorCode_INTERNAL_ERROR,
+			Message:   &msg,
+		}
+		result := formatAPIError(err)
+		assert.Contains(t, result.Error(), "internal failure")
+		assert.Contains(t, result.Error(), "INTERNAL_ERROR")
+	})
+
+	t.Run("system error without message", func(t *testing.T) {
+		err := &edam.EDAMSystemException{
+			ErrorCode: edam.EDAMErrorCode_INTERNAL_ERROR,
+		}
+		result := formatAPIError(err)
+		assert.Contains(t, result.Error(), "INTERNAL_ERROR")
+	})
+
+	t.Run("user error with parameter", func(t *testing.T) {
+		param := "Note.title"
+		err := &edam.EDAMUserException{
+			ErrorCode: edam.EDAMErrorCode_BAD_DATA_FORMAT,
+			Parameter: &param,
+		}
+		result := formatAPIError(err)
+		assert.Contains(t, result.Error(), "Note.title")
+		assert.Contains(t, result.Error(), "BAD_DATA_FORMAT")
+	})
+
+	t.Run("user error without parameter", func(t *testing.T) {
+		err := &edam.EDAMUserException{
+			ErrorCode: edam.EDAMErrorCode_PERMISSION_DENIED,
+		}
+		result := formatAPIError(err)
+		assert.Contains(t, result.Error(), "PERMISSION_DENIED")
+	})
+
+	t.Run("not found error with identifier and key", func(t *testing.T) {
+		id := "Note.guid"
+		key := "abc-123"
+		err := &edam.EDAMNotFoundException{
+			Identifier: &id,
+			Key:        &key,
+		}
+		result := formatAPIError(err)
+		assert.Contains(t, result.Error(), "Note.guid")
+		assert.Contains(t, result.Error(), "abc-123")
+	})
+
+	t.Run("not found error with identifier only", func(t *testing.T) {
+		id := "Note.guid"
+		err := &edam.EDAMNotFoundException{
+			Identifier: &id,
+		}
+		result := formatAPIError(err)
+		assert.Contains(t, result.Error(), "Note.guid")
+	})
+
+	t.Run("not found error bare", func(t *testing.T) {
+		err := &edam.EDAMNotFoundException{}
+		result := formatAPIError(err)
+		assert.Contains(t, result.Error(), "not found")
+	})
+
+	t.Run("regular error passes through", func(t *testing.T) {
+		err := fmt.Errorf("some other error")
+		result := formatAPIError(err)
+		assert.Equal(t, "some other error", result.Error())
+	})
+}

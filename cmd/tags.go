@@ -20,7 +20,7 @@ var tagsCmd = &cobra.Command{
 
 		tags, err := ns.ListTags(context.Background(), token)
 		if err != nil {
-			return fmt.Errorf("failed to list tags: %w", err)
+			return fmt.Errorf("failed to list tags: %w", formatAPIError(err))
 		}
 
 		if jsonFlag {

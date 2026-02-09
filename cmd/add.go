@@ -54,7 +54,7 @@ var addCmd = &cobra.Command{
 
 		created, err := ns.CreateNote(context.Background(), token, note)
 		if err != nil {
-			return fmt.Errorf("failed to create note: %w", err)
+			return fmt.Errorf("failed to create note: %w", formatAPIError(err))
 		}
 
 		if jsonFlag {

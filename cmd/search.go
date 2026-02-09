@@ -40,7 +40,7 @@ var searchCmd = &cobra.Command{
 
 		results, err := ns.FindNotesMetadata(context.Background(), token, filter, 0, 100, resultSpec)
 		if err != nil {
-			return fmt.Errorf("failed to search notes: %w", err)
+			return fmt.Errorf("failed to search notes: %w", formatAPIError(err))
 		}
 
 		if jsonFlag {

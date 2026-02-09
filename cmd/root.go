@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -84,6 +85,46 @@ func saveConfig(c *Config) error {
 		return err
 	}
 	return os.WriteFile(configPath, data, 0600)
+}
+
+// formatAPIError converts Evernote SDK exceptions into human-readable error messages.
+func formatAPIError(err error) error {
+	var sysErr *edam.EDAMSystemException
+	if errors.As(err, &sysErr) {
+		if sysErr.GetErrorCode() == edam.EDAMErrorCode_RATE_LIMIT_REACHED {
+			duration := sysErr.GetRateLimitDuration()
+			return fmt.Errorf("rate limited by Evernote, try again in %d seconds", duration)
+		}
+		msg := sysErr.GetMessage()
+		if msg != "" {
+			return fmt.Errorf("Evernote system error (%s): %s", sysErr.GetErrorCode(), msg)
+		}
+		return fmt.Errorf("Evernote system error: %s", sysErr.GetErrorCode())
+	}
+
+	var userErr *edam.EDAMUserException
+	if errors.As(err, &userErr) {
+		param := userErr.GetParameter()
+		if param != "" {
+			return fmt.Errorf("invalid request (%s): %s", userErr.GetErrorCode(), param)
+		}
+		return fmt.Errorf("invalid request: %s", userErr.GetErrorCode())
+	}
+
+	var notFound *edam.EDAMNotFoundException
+	if errors.As(err, &notFound) {
+		id := notFound.GetIdentifier()
+		key := notFound.GetKey()
+		if id != "" && key != "" {
+			return fmt.Errorf("not found: %s = %s", id, key)
+		}
+		if id != "" {
+			return fmt.Errorf("not found: %s", id)
+		}
+		return fmt.Errorf("not found")
+	}
+
+	return err
 }
 
 // rootCmd is the main command when called without any subcommands.

@@ -20,7 +20,7 @@ var notebooksCmd = &cobra.Command{
 
 		notebooks, err := ns.ListNotebooks(context.Background(), token)
 		if err != nil {
-			return fmt.Errorf("failed to list notebooks: %w", err)
+			return fmt.Errorf("failed to list notebooks: %w", formatAPIError(err))
 		}
 
 		if jsonFlag {

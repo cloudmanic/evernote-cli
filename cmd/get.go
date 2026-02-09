@@ -46,7 +46,7 @@ var getCmd = &cobra.Command{
 		guid := edam.GUID(args[0])
 		note, err := ns.GetNote(context.Background(), token, guid, true, false, false, false)
 		if err != nil {
-			return fmt.Errorf("failed to get note: %w", err)
+			return fmt.Errorf("failed to get note: %w", formatAPIError(err))
 		}
 
 		if jsonFlag {

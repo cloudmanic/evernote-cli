@@ -50,7 +50,7 @@ Examples:
 		// Fetch the existing note to get its current title and content
 		existing, err := ns.GetNote(context.Background(), token, guid, true, false, false, false)
 		if err != nil {
-			return fmt.Errorf("failed to get note: %w", err)
+			return fmt.Errorf("failed to get note: %w", formatAPIError(err))
 		}
 
 		// Build the note update - GUID and title are always required by the API
@@ -95,7 +95,7 @@ Examples:
 		// Send the update to Evernote
 		updated, err := ns.UpdateNote(context.Background(), token, note)
 		if err != nil {
-			return fmt.Errorf("failed to update note: %w", err)
+			return fmt.Errorf("failed to update note: %w", formatAPIError(err))
 		}
 
 		if jsonFlag {
