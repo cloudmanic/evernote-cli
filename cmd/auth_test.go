@@ -26,12 +26,41 @@ func TestAuthCommandRegistration(t *testing.T) {
 }
 
 func TestOpenBrowser(t *testing.T) {
-	testURL := "https://example.com"
-
-	t.Run("openBrowser doesn't panic", func(t *testing.T) {
+	t.Run("openBrowser doesn't panic with valid URL", func(t *testing.T) {
+		testURL := "https://example.com"
 		assert.NotPanics(t, func() {
 			openBrowser(testURL)
 		})
+	})
+
+	t.Run("openBrowser handles invalid URL safely", func(t *testing.T) {
+		// Test with various invalid or potentially malicious URLs
+		invalidURLs := []string{
+			"javascript:alert('xss')",
+			"file:///etc/passwd",
+			"not-a-url",
+			"",
+			"http://",
+			"ftp://example.com",
+		}
+		for _, url := range invalidURLs {
+			assert.NotPanics(t, func() {
+				openBrowser(url)
+			}, "Should handle invalid URL: %s", url)
+		}
+	})
+
+	t.Run("openBrowser accepts valid http and https URLs", func(t *testing.T) {
+		validURLs := []string{
+			"http://example.com",
+			"https://example.com",
+			"https://www.evernote.com/OAuth.action?oauth_token=test",
+		}
+		for _, url := range validURLs {
+			assert.NotPanics(t, func() {
+				openBrowser(url)
+			}, "Should accept valid URL: %s", url)
+		}
 	})
 }
 

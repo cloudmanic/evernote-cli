@@ -49,6 +49,49 @@ func TestDownloadCommand(t *testing.T) {
 		assert.Equal(t, fileData, data)
 	})
 
+	t.Run("path traversal attack prevented", func(t *testing.T) {
+		tempDir := t.TempDir()
+		// Malicious filename attempting path traversal
+		maliciousFileName := "../../etc/passwd"
+		mime := "text/plain"
+		guid := edam.GUID("res-malicious")
+		fileData := []byte("malicious content")
+
+		mock := &mockNoteStore{
+			resource: &edam.Resource{
+				GUID: &guid,
+				Mime: &mime,
+				Data: &edam.Data{Body: fileData},
+				Attributes: &edam.ResourceAttributes{
+					FileName: &maliciousFileName,
+				},
+			},
+		}
+		cleanup := setMockNoteStore(mock)
+		defer cleanup()
+
+		// Change to temp directory to test
+		oldWd, _ := os.Getwd()
+		os.Chdir(tempDir)
+		defer os.Chdir(oldWd)
+
+		downloadOutput = "" // Let it use the filename from resource
+		var buf bytes.Buffer
+		downloadCmd.SetOut(&buf)
+		err := downloadCmd.RunE(downloadCmd, []string{"res-malicious"})
+		require.NoError(t, err)
+
+		// File should be created in current directory with sanitized name (just "passwd")
+		// not in ../../etc/passwd
+		data, err := os.ReadFile("passwd")
+		require.NoError(t, err)
+		assert.Equal(t, fileData, data)
+
+		// Verify file was NOT created in parent directories
+		_, err = os.Stat("../../etc/passwd")
+		assert.True(t, os.IsNotExist(err), "file should not exist in parent directory")
+	})
+
 	t.Run("API error", func(t *testing.T) {
 		mock := &mockNoteStore{
 			resource: &edam.Resource{},
