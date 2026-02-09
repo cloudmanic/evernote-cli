@@ -16,6 +16,9 @@ import (
 
 // jsonFlag is used by subcommands to output JSON.
 var jsonFlag bool
+
+// Version is set at build time via -ldflags. Defaults to "dev" for local builds.
+var Version = "dev"
 var configPath = filepath.Join(os.Getenv("HOME"), ".config", "evernote", "auth.json")
 
 // Config holds the Evernote API credentials and auth token.
