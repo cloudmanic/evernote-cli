@@ -20,6 +20,7 @@ type mockNoteStore struct {
 	notes       *edam.NotesMetadataList
 	createdNote *edam.Note
 	gotNote     *edam.Note
+	updatedNote *edam.Note
 	resource    *edam.Resource
 	err         error
 }
@@ -66,11 +67,22 @@ func (m *mockNoteStore) GetResource(ctx context.Context, authenticationToken str
 	return m.resource, nil
 }
 
+// UpdateNote returns the mock updated note.
+func (m *mockNoteStore) UpdateNote(ctx context.Context, authenticationToken string, note *edam.Note) (*edam.Note, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	if m.updatedNote != nil {
+		return m.updatedNote, nil
+	}
+	return note, nil
+}
+
 // setMockNoteStore overrides getNoteStoreFunc for testing and returns a cleanup function.
 func setMockNoteStore(mock *mockNoteStore) func() {
 	original := getNoteStoreFunc
 	getNoteStoreFunc = func() (noteStoreClient, string, error) {
-		if mock.err != nil && mock.notebooks == nil && mock.tags == nil && mock.notes == nil && mock.createdNote == nil && mock.gotNote == nil && mock.resource == nil {
+		if mock.err != nil && mock.notebooks == nil && mock.tags == nil && mock.notes == nil && mock.createdNote == nil && mock.gotNote == nil && mock.updatedNote == nil && mock.resource == nil {
 			return nil, "", mock.err
 		}
 		return mock, "test-token", nil

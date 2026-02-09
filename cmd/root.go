@@ -32,6 +32,7 @@ type noteStoreClient interface {
 	CreateNote(ctx context.Context, authenticationToken string, note *edam.Note) (*edam.Note, error)
 	GetNote(ctx context.Context, authenticationToken string, guid edam.GUID, withContent bool, withResourcesData bool, withResourcesRecognition bool, withResourcesAlternateData bool) (*edam.Note, error)
 	GetResource(ctx context.Context, authenticationToken string, guid edam.GUID, withData bool, withRecognition bool, withAttributes bool, withAlternateData bool) (*edam.Resource, error)
+	UpdateNote(ctx context.Context, authenticationToken string, note *edam.Note) (*edam.Note, error)
 }
 
 // getNoteStoreFunc returns a NoteStore client and auth token. Can be overridden in tests.
