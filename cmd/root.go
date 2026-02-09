@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/dreampuf/evernote-sdk-golang/client"
 	"github.com/dreampuf/evernote-sdk-golang/edam"
@@ -92,8 +93,15 @@ func formatAPIError(err error) error {
 	var sysErr *edam.EDAMSystemException
 	if errors.As(err, &sysErr) {
 		if sysErr.GetErrorCode() == edam.EDAMErrorCode_RATE_LIMIT_REACHED {
+			msg := sysErr.GetMessage()
 			duration := sysErr.GetRateLimitDuration()
-			return fmt.Errorf("rate limited by Evernote, try again in %d seconds", duration)
+			if strings.Contains(msg, "RTE room has already been open") {
+				return fmt.Errorf("note is currently open in Evernote, close it there first then retry")
+			}
+			if duration > 0 {
+				return fmt.Errorf("rate limited by Evernote, try again in %d seconds", duration)
+			}
+			return fmt.Errorf("rate limited by Evernote: %s", msg)
 		}
 		msg := sysErr.GetMessage()
 		if msg != "" {

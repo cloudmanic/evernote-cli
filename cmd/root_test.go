@@ -330,6 +330,18 @@ func TestFormatAPIError(t *testing.T) {
 		assert.Contains(t, result.Error(), "60 seconds")
 	})
 
+	t.Run("note open in Evernote RTE", func(t *testing.T) {
+		duration := int32(60)
+		msg := "Attempt updateNote where RTE room has already been open for note: abc-123"
+		err := &edam.EDAMSystemException{
+			ErrorCode:         edam.EDAMErrorCode_RATE_LIMIT_REACHED,
+			Message:           &msg,
+			RateLimitDuration: &duration,
+		}
+		result := formatAPIError(err)
+		assert.Contains(t, result.Error(), "note is currently open in Evernote")
+	})
+
 	t.Run("system error with message", func(t *testing.T) {
 		msg := "internal failure"
 		err := &edam.EDAMSystemException{
