@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/dreampuf/evernote-sdk-golang/client"
@@ -26,7 +28,13 @@ func runAuthFlow(clientID, clientSecret string) (string, string, error) {
 
 	// Set up local server for callback using a custom mux to avoid conflicts
 	mux := http.NewServeMux()
-	srv := &http.Server{Addr: ":8080", Handler: mux}
+	srv := &http.Server{
+		Addr:         ":8080",
+		Handler:      mux,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
 	verifierCh := make(chan string, 1)
 
 	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
@@ -73,15 +81,27 @@ func runAuthFlow(clientID, clientSecret string) (string, string, error) {
 }
 
 // openBrowser opens the given URL in the user's default browser.
-func openBrowser(url string) {
-	var err error
+// It validates the URL to prevent command injection attacks.
+func openBrowser(urlStr string) {
+	// Validate URL to prevent command injection
+	parsedURL, err := url.Parse(urlStr)
+	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
+		// Invalid URL, don't attempt to open
+		return
+	}
+
+	// Only allow http and https schemes
+	if !strings.EqualFold(parsedURL.Scheme, "http") && !strings.EqualFold(parsedURL.Scheme, "https") {
+		return
+	}
+
 	switch runtime.GOOS {
 	case "linux":
-		err = exec.Command("xdg-open", url).Start()
+		err = exec.Command("xdg-open", urlStr).Start()
 	case "windows":
-		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", urlStr).Start()
 	case "darwin":
-		err = exec.Command("open", url).Start()
+		err = exec.Command("open", urlStr).Start()
 	default:
 		err = fmt.Errorf("unsupported platform")
 	}
